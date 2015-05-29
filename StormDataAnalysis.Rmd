@@ -1,0 +1,344 @@
+---
+title: "NOAA Storm Damage Analysis"
+author: "Lisa Faiss"
+date: "Monday, May 28, 2015"
+output: 
+    html_document:
+        keep_md: true
+---
+### SYNOPSIS
+
+This report describes the economic and human health impacts from weather events for all US states and its territories between 1955 and 2011, providing government officials insights for effectively appropriating emergency response funds and policy adoption. This report demonstrates when and where catastrophic events occur is unpredictable, suggesting that national funding to supplement local emergency response funding is prudent. Some of these deleterious effects may be lessened with proper preventative measures. Tornadoes cause the most fatalities, yet this can be minimized by providing early warning systems to alert residents of their need to seek shelter. Heat waves also cause many deaths and could be minimized through outreach programs aimed at the elderly poor to ensure they have safe shelter. Property damage is most effected by rainstorms, followed by hurricanes and tornadoes. Preventative measures such as more weather-tolerant building codes could reduce losses. Relief funding to farmers may be the most practical response for crop destruction, given crops are most susceptible to damage from unpreventable heat waves and flooding. These data also uncover inconsistencies in weather event recording, suggesting a need for more accurate, standardized reporting. 
+
+### DATA PROCESSING
+
+Load packages only as needed. Then extract the NOAA Weather data from an archived Cloudfront server. Indicate that the data items should be treated as character, rather than factors. 
+
+```{r, message=FALSE, warning=FALSE}
+
+# Install function for packages    
+packages<-function(x){
+    x<-as.character(match.call()[[2]])
+    if (!require(x,character.only=TRUE)){
+        install.packages(pkgs=x,repos="http://cran.rstudio.com")
+        require(x,character.only=TRUE)
+    }
+}
+packages(ggplot2); packages(dplyr); packages(xtable); packages(knitr); packages(stringr)
+```
+
+```{r setoptions}
+options(scipen=999)  ## supress exponential notation for numerics in the Markdown file
+options(width = 100)
+```
+
+```{r, cache=TRUE}
+# Read in the weather data
+
+download_url<-"http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(download_url, destfile="rawStorm.csv.bz2")
+
+rawStormData <- read.csv("rawStorm.csv.bz2", stringsAsFactors = FALSE, sep="," )
+
+rawStormCt = length(rawStormData$EVTYPE) 
+```
+
+#### Cleansing Data
+Initial processing was performed on these data to delete rows whose event type, "EVTYPE", contain any type that's either already accounted for (Summary) or is not attributable to a storm type (?,None,etc.). The date was converted to the Date class, and the time was stripped, since all were set to "00:00:00".
+
+```{r, cache=TRUE}
+
+## Subset the data. 
+
+uniqueRawEvents <- unique(rawStormData$EVTYPE)
+
+# Grab the columns that allow analysis of event injuries, fatalities, and property/crop damage or provide 
+# context, such as date and state. Delete rows containing events that are either already accounted for 
+# (summaries) or mischaracterized or unattributable to a storm type.
+
+discardEvents = "Summary|\\?|NONE|RECORD|URBAN AND SMALL|APACHE COUNTY|PATTERN|Other|MONTHLY|URBAN/SMALL|URBAN SMALL|No Severe"
+stormData = rawStormData[!grepl(discardEvents, rawStormData$EVTYPE, ignore.case = TRUE), 
+                         c("EVTYPE", "BGN_DATE", "STATE", "INJURIES", "FATALITIES", 
+                           "CROPDMG", "CROPDMGEXP", "PROPDMG", "PROPDMGEXP")]
+names(stormData) = c("EVENT", "DATE", "STATE", "INJURY", "FATAL", "CROP_COST", "CROPEXP", "PROPERTY_COST", "PROPEXP")
+stormData$DATE = as.Date(stormData$DATE, "%m/%d/%Y")
+
+# Get the number of records in the cleaned data set
+stormCt = length(stormData$EVENT)
+```
+
+In total, `r format(rawStormCt, big.mark=",")` records were read from the raw data file. Only `r format((rawStormCt -stormCt)/rawStormCt * 100,digits=3)`% of these data were deleted, leaving `r format(stormCt, big.mark=",")` records to examine.
+
+Because the property and crop damage costs have inconsistent units, the data were converted to a standard unit of dollars in millions (M). If a unit other than K (thousands), M (millions), or B (billions) is used, the dollar amount will be set to 0 and not used in the summarized data.
+
+```{r, cache=TRUE}
+standardizeCost <- function(x,w) {
+                        if(w == "B" | w == "b") { x = 1000 * x
+                        } else if(w == "M" | w == "m") { x = 1 * x
+                        } else if(w == "K" | w == "k") { x = .001 * x
+                        } else x = 0 }
+
+stormData$CROP_COST <- unlist(Map(standardizeCost, stormData$CROP_COST, stormData$CROPEXP))
+
+stormData$PROPERTY_COST <- unlist(Map(standardizeCost, stormData$PROPERTY_COST, stormData$PROPEXP))
+```
+
+#### Examination of Outliers
+
+Examining the summaries for injuries, fatalities, and property and crop damage it's apparent that the data is right-skewed and extreme outliers will have more influence on summarized values. 
+
+```{r}
+summary(stormData$INJURY); summary(stormData$FATAL); summary(stormData$PROPERTY_COST);summary(stormData$CROP_COST)
+```
+
+The records corresponding to the maximum storm injuries, fatalities, property damage, and crop damage are shown. The date, state, and location are supplied for context. Internet searches were performed to determine the nature of the event that transpired. 
+
+**MOST INJURIES**
+
+The event that resulted in the most injuries, and a fair amount of fatalities, are associated with a tornado that struck Wichita, Texas in 1979. [1]
+
+```{r}
+# Check to see maximum damage after standardizing cost exponents
+stormData[which.max(stormData$INJURY),]
+```
+
+**MOST FATALITIES**
+
+The event that first emerges as the weather event with the most fatilities appears to be the Chicago heat wave of 1995 which claimed numerous lives. It inordinately affected the elderly poor, since they lacked air conditioning and kept their windows and doors shut as a result of living in poor neighborhoods. The extreme temperatures led to social unrest as some neighborhoods vandalized fire hydrants, which in turn led to water pressure loss in nearby homes already experiencing power loss. This is a lesson in why government agencies must be proactive regarding predicted adverse weather conditions. [2] Later, we'll see that this event surfaced due to under-reporting of another event. 
+
+```{r}
+# Check to see maximum damage after standardizing cost exponents
+stormData[which.max(stormData$FATAL),]
+```
+
+**GREATEST CROP LOSSES**
+
+The Great Flood of 1993 caused the largest crop damage in Illinois, affecting nearby St. Louis as well and shutting down major thoroughfares for weeks. The flood was record-setting in duration, lasting 144 days above flood stage levels. It was the most costly flood in US modern history. Note that fatalities are not reported for this event, though 47 people were reported to have lost their lives by the USGS. [3]
+
+```{r}
+# Check to see maximum damage after standardizing cost exponents
+stormData[which.max(stormData$CROP_COST),]
+```
+
+**GREATEST PROPERTY DAMAGE**
+
+Surprisingly, these data indicate the single event with the greatest property damage was due to California flooding in January of 2006, which resulted in Federal disaster declarations in ten counties. The USGS declared damages at $300 million, which is magnitudes lower than reported in these data. [4]
+
+```{r}
+# Check to see maximum damage after standardizing cost exponents
+stormData[which.max(stormData$PROPERTY_COST),] 
+```
+
+Resetting the value of the California storm to that reported by the USGS estimate of $300M reveals that Hurricane Katrina caused the greatest property damage, $31B.  
+
+```{r}
+# Set the property damage to that calculated by the USGS estimate
+stormData$PROPERTY_COST[which.max(stormData$PROPERTY_COST)] = 300  # Adjust to value reported by USGS
+propIndex = which.max(stormData$PROPERTY_COST)
+stormData[propIndex,]
+```
+
+Looking at these data, the reporting once again seems suspect, given no fatalities are reported. According to a report by the National Hurricane Center, Katrina's actual fatalities were 1,200 people with overall damage of $108B.[5] 
+
+It's entry was thus corrected to reflect this new information. Injuries could not be located, so it was set to the ratio of injuries/fatalities seen in the overall data (calculated from means).
+
+```{r}
+stormData$PROPERTY_COST[propIndex] = 108000  # $108B in millions
+stormData$FATAL[propIndex] = 1200
+stormData$INJURY[propIndex] = round(stormData$FATAL[propIndex] * mean(stormData$INJURY)/mean(stormData$FATAL))
+stormData$INJURY[propIndex]
+```
+
+#### Data Anomalies 
+
+Analyzing these data reveal the need for agencies to standardize event categorization and ensure accurate reporting of human health and economic impacts. Outlier weather events such as Hurricane Katrina particularly highlight these data conflict with reporting done by other agencies; these data reported no fatalities or injuries though it was the deadliest and costliest storm event to date. Many agencies may lack the training necessary to ensure accurate reporting. Damage costs can be magnitudes off if innacurate exponents are entered. 
+
+Because these data were produced using NOAA's *Storm Data* software, it could be modified to only allow standard event selections, with an addendum field for further detail. Additionally, following data entry, a human readable summary could be displayed for the operator to confirm before finalizing data entry. [6]
+
+### RESULTS
+
+#### Examining All U.S. Storm Damage
+The summaries  below show the mean, the middle 50% of values, and overall spread for property damage, crop damage, injuries, and fatalities. 
+
+These data reveal extremely right-skewed distributions for weather-related injuries, fatalities, and crop/property damage. The means are near zero, along with 50% of storm events. The maximum values indicate outlier storm events that contribute inordinate influence on overall summary outcomes of these measures. 
+
+```{r} 
+summary(stormData$INJURY); summary(stormData$FATAL)
+summary(stormData$PROPERTY_COST); summary(stormData$CROP_COST)
+```
+
+
+#### Consolidate Events
+Examining the event type, it is obvious event naming is not standardized (see Appendix), with `r length(uniqueRawEvents)` unique names. These data event types were mapped to standardized naming to summarize damages from like events more easily. The eventChk variable used in the code chunk below indicates the mapping that was used. It is an array of paired data: the first pair element indicates the EVENT type's string pattern to be searched while the second specifies the replacement name. 
+
+```{r, cache=TRUE}
+## EVENT CONVERSION PAIRS: Search string and aggregate event name
+eventChk = list(c("TORNADO|FUNNEL|WALLCLOUD|WALL CLOUD|TORNDAO|SPOUT", "TORNADO"),
+                c("FLO*OD|FLD|STREAM|DROWNING|DAM", "FLOOD"),
+                c("FIRE|RED FLAG|SMOKE","FIRE"), 
+                c("VOLCAN|VOG","VOLCANO"),
+                c("SNOW|BLIZZ|WINT|LOW|ICY|ICE|COLD|FROST|FREEZ|GLAZE|^AVA|HYPO|HEAVY MIX|COOL|SLEET", 
+                  "SNOW/ICE"),
+                c("TIDE|MARINE|RIP|CURRENT|BEACH|SURF|SEA|COAST|SWELL|WATER|RISING|SEICHE|WAVE|TSU", 
+                  "TIDE/OCEAN"), 
+                c("WIND|WND|DUST|GUSTNADO|BLOW|TURBULENCE|SOUTHEAST", "WIND"),
+                c("THUNDER|MICROBURST|TSTM|RAIN|WET|DOWNBURST|PRECIP|LIGHT|LIGN|SHOWER|STORM", 
+                  "RAINSTORM"),
+                c("HURRICANE|SURGE|TROPICAL|TYPHOON|FLOYD","HURRICANE"), 
+                c("HAIL","HAIL"),
+                c("HEAT|HIGH|EXCESSIVE|WARM|DRY|DRIEST|DROUGHT|HOT|HYPER", "HEAT"),
+                c("SLIDE|LANDSLUMP","LANDSLIDE"),
+                c("FOG","FOG"))
+
+# Function that allows renaming of matched strings to a "group" name, based on a mapping pair. 
+# The first part of the pair is a regular expression pattern to search for. If the pattern is 
+# matched, it is replaced by second element of the pair, the "group" name.
+groupRename <- function(x, convPair){
+    for(i in 1:length(x)){
+        for(pair in 1:length(convPair)){
+            if(grepl(convPair[[pair]][1],x[i], ignore.case = TRUE)) {
+                x[i] = convPair[[pair]][2]
+                break
+            }
+        }
+    }
+    return (x)
+}
+
+# Name similar events with same event name so that they can be grouped together for summarization. 
+stormData$EVENT = groupRename(stormData$EVENT, eventChk)
+```
+
+The events were mapped to one in the following set: 
+`r unique(stormData$EVENT)`.
+
+Analysis of the data was performed by YEAR and by EVENT. Both analyses summarized the weather events data by total number of injuries, fatalities, property loss, and crop damage. The EVENT analysis created a table grouping the data by weather event ordered by descending fatalites and another by descending property damage. The YEAR analysis created summarized data grouped by year. 
+
+#### Summarized Weather Analysis by EVENT
+
+```{r}
+# Group the data by event type and summarize injuries, fatalities, and property/crop damage
+stormSummary <- stormData %>%         
+    group_by(EVENT) %>%
+        summarise_each(funs(sum), INJURY, FATAL, PROPERTY_COST, CROP_COST) %>%
+        arrange(desc(FATAL))
+
+eventStatistics<-summary(stormSummary)
+stormSummary
+```
+
+```{r}
+dplyr::arrange(stormSummary,desc(PROPERTY_COST))
+```
+
+These tables reveal interesting details:
+
++ Tornadoes cause the most fatalities and injuries, with a fair amount of property damage as well. 
+
++ Heat waves produce a large number of fatalities with relatively lower injuries and very little property damage.
+
++ Heat waves and flooding cause the greatest crop losses. 
+
++ Surprisingly, rainstorms cause the greatest property damage and a fair amount of fatalities and injuries. Though a single rainstorm is less destructive than a tornado or hurricane, they are far more common and thus cummulatively cause more damage (though tornados are more deadly). 
+
++ Hurricanes have relatively low fatalities and injuries relative to destruction of property. This may be due to how effective early warning and preparation is in reducing fatalities and injuries; government coordinated warning and evacuation plans appear to have minimized their impact on human health. 
+
+#### Summarized Weather Analysis by YEAR
+
+```{r}
+# Group the data by year and summarize annual injuries, fatalities, and property/crop damage
+stormSummary <- stormData %>%         
+    transform(YEAR = as.numeric(format(DATE,"%Y"))) %>%
+    group_by(YEAR) %>%
+        summarise_each(funs(sum), INJURY, FATAL, PROPERTY_COST, CROP_COST)
+
+annualStatistics<-summary(stormSummary)
+```
+
+These plots illustrate weather conditions over time. Note the bump in the mid 1990s in all reported health and economic impacts. This is most likely due to new requirements for reporting these measurements for accurate tracking of weather conditions impacts. 
+
+```{r, fig.height=5, fig.width=12}
+g = ggplot(data = stormSummary, aes(x = YEAR)) + ylab("Human Health") + xlab("Year")
+g = g + geom_line(aes(y = INJURY, colour = "Injuries"), size=1)
+g = g + geom_line(aes(y = FATAL, colour = "Fatalities"), size=1)
+g = g + ggtitle("Annual Injuries and Fatalties")
+g = g + theme(legend.position=c(.1, .8))              # fix legend position
+g = g + scale_colour_manual(name = "Human\nHealth", values=c("tomato","steelblue"))  # fix legend name
+
+h = ggplot(data = stormSummary, aes(x = YEAR)) + ylab("Cost ($M)") + xlab("Year")
+h = h + geom_line(aes(y = PROPERTY_COST, colour = "Property"), size=1)
+h = h + geom_line(aes(y = CROP_COST, colour = "Crop"), size=1)
+h = h + ggtitle("Annual Crop and Property Damage($M)")
+h = h + theme(legend.position=c(.1, .8))      # fix legend position
+h = h + scale_colour_manual(name = "Structural\nDamage", values=c("tomato","steelblue"))  # fix legend name
+g;h
+```
+
+Reviewing this chart, one might conclude that storms have become more extreme after the mid 1990s. It is difficult to fathom that there was very little property and crop damage or so few injuries and fatalities prior to this period. It is unknown if agencies prior to this time actually reported this information. In addition, the provided data makes no mention of whether or not the dollar values have been adjusted for inflation. 
+
+Examining the fatalities and injuries demonstrates weather impacts vary greatly over time. Drilling down into the most extreme events for all damage categories reveals that catastrophic weather can occur almost anywhere at any time. 
+
+## References
+[1] "1979 Red River Valley Tornado Outbreak", Wikipedia, http://en.wikipedia.org/wiki/1979_Red_River_Valley_tornado_outbreak
+
+[2] "Dying Alone", University of Chicago Press, http://press.uchicago.edu/Misc/Chicago/443213in.html
+
+[3] "Flood of 1993", USGS, http://mo.water.usgs.gov/fact_sheets/fs-188-95-southard/report.pdf
+
+[4] "Storms and Flooding in California in December 2005 and January 2006", USGS, http://pubs.usgs.gov/of/2006/1182/
+
+[5] "NOAA Technical Memorandum NWS NHC-6", Tables 2 & 3A, National Hurricane Center, http://www.nhc.noaa.gov/pdf/nws-nhc-6.pdf
+
+[6] "National Weather Service Instruction 10-1605", page 4, National Weather Service, "https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf"
+
+
+## APPENDIX:
+
+### Processed Storm Data 
+
+```{r}
+
+str(stormData)   
+summary(stormData)
+
+head(stormData, n = 15)
+tail(stormData, n = 15)   
+```
+
+### Summary Storm Data (by EVENT)
+
+```{r}
+eventStatistics
+```
+
+### Summary Storm Data (by YEAR)
+
+```{r}
+annualStatistics
+head(stormSummary, n = 15); tail(stormSummary, n = 15)
+```
+
+### Raw Data 
+
+```{r}
+
+str(rawStormData)
+summary(rawStormData)
+```
+
+Test Github integration with R Studio
+
+### Raw Events, Damage Exponents, and Renamed/Regrouped Events
+
+```{r}
+## Unique Raw Storm Data Crop Damage Exponents; should be "K", "M", or "B"
+unique(rawStormData$CROPDMGEXP)
+## Unique Raw Storm Data Property Damage Exponents; should be "K", "M", or "B"
+unique(rawStormData$PROPDMGEXP)
+
+## Unique Refactored Storm Events
+unique(stormData$EVENT)
+## Unique Raw Storm Data Events
+uniqueRawEvents
+```
+
