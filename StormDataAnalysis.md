@@ -703,7 +703,6 @@ summary(rawStormData)
 ## 
 ```
 
-Test Github integration with R Studio
 
 ### Raw Events, Damage Exponents, and Renamed/Regrouped Events
 
