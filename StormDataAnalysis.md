@@ -304,6 +304,12 @@ stormSummary <- stormData %>%
         arrange(desc(FATAL))
 
 eventStatistics<-summary(stormSummary)
+```
+
+**EVENT Summary - MOST FATAL**
+
+
+```r
 stormSummary
 ```
 
@@ -325,6 +331,8 @@ stormSummary
 ## 12       HAIL   1371    15    15732.8887  3046.8374
 ## 13    VOLCANO      0     0        0.5000     0.0000
 ```
+
+**EVENT Summary - MOST PROPERTY DAMAGE**
 
 
 ```r
@@ -395,7 +403,7 @@ h = h + scale_colour_manual(name = "Structural\nDamage", values=c("tomato","stee
 g;h
 ```
 
-![](StormDataAnalysis_files/figure-html/unnamed-chunk-17-1.png) ![](StormDataAnalysis_files/figure-html/unnamed-chunk-17-2.png) 
+![](StormDataAnalysis_files/figure-html/unnamed-chunk-18-1.png) ![](StormDataAnalysis_files/figure-html/unnamed-chunk-18-2.png) 
 
 Reviewing this chart, one might conclude that storms have become more extreme after the mid 1990s. It is difficult to fathom that there was very little property and crop damage or so few injuries and fatalities prior to this period. It is unknown if agencies prior to this time actually reported this information. In addition, the provided data makes no mention of whether or not the dollar values have been adjusted for inflation. 
 

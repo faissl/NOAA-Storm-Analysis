@@ -224,8 +224,15 @@ stormSummary <- stormData %>%
         arrange(desc(FATAL))
 
 eventStatistics<-summary(stormSummary)
+```
+
+**EVENT Summary - MOST FATAL**
+
+```{r}
 stormSummary
 ```
+
+**EVENT Summary - MOST PROPERTY DAMAGE**
 
 ```{r}
 dplyr::arrange(stormSummary,desc(PROPERTY_COST))

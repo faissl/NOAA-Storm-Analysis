@@ -249,8 +249,9 @@ stormSummary &lt;- stormData %&gt;%
         summarise_each(funs(sum), INJURY, FATAL, PROPERTY_COST, CROP_COST) %&gt;%
         arrange(desc(FATAL))
 
-eventStatistics&lt;-summary(stormSummary)
-stormSummary</code></pre>
+eventStatistics&lt;-summary(stormSummary)</code></pre>
+<p><strong>EVENT Summary - MOST FATAL</strong></p>
+<pre class="r"><code>stormSummary</code></pre>
 <pre><code>## Source: local data frame [13 x 5]
 ## 
 ##         EVENT INJURY FATAL PROPERTY_COST  CROP_COST
@@ -267,6 +268,7 @@ stormSummary</code></pre>
 ## 11  LANDSLIDE     55    44      327.3961    20.0170
 ## 12       HAIL   1371    15    15732.8887  3046.8374
 ## 13    VOLCANO      0     0        0.5000     0.0000</code></pre>
+<p><strong>EVENT Summary - MOST PROPERTY DAMAGE</strong></p>
 <pre class="r"><code>dplyr::arrange(stormSummary,desc(PROPERTY_COST))</code></pre>
 <pre><code>## Source: local data frame [13 x 5]
 ## 
