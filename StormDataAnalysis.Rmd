@@ -1,7 +1,7 @@
 ---
 title: "NOAA Storm Damage Analysis"
 author: "Lisa Faiss"
-date: "Monday, May 28, 2015"
+date: "Wednesday, June 3rd, 2015"
 output: 
     html_document:
         keep_md: true
@@ -24,7 +24,7 @@ packages<-function(x){
         require(x,character.only=TRUE)
     }
 }
-packages(ggplot2); packages(dplyr); packages(xtable); packages(knitr); packages(stringr)
+packages(ggplot2); packages(dplyr)
 ```
 
 ```{r setoptions}
